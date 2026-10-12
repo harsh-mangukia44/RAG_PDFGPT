@@ -1,0 +1,2386 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>How RAG Works: The PDF Chatbot Explained</title>
+    <style>
+      :root {
+        --bg: #f6f8fb;
+        --sf: #fff;
+        --tx: #18212f;
+        --mu: #52607a;
+        --bd: #d9e0ec;
+        --nv: #1d3b6e;
+        --tl: #0d7a74;
+        --am: #b05f00;
+        --rd: #b3382c;
+        --tint: #eaf0fa;
+        --r: 12px;
+      }
+      * {
+        box-sizing: border-box;
+      }
+      html {
+        scroll-behavior: smooth;
+      }
+      body {
+        margin: 0;
+        background: var(--bg);
+        color: var(--tx);
+        font:
+          20px/1.78 system-ui,
+          -apple-system,
+          "Segoe UI",
+          Roboto,
+          sans-serif;
+      }
+      h1,
+      h2,
+      h3 {
+        font-family: Georgia, "Times New Roman", serif;
+        color: var(--nv);
+        line-height: 1.25;
+        margin: 0 0 0.5em;
+      }
+      h1 {
+        font-size: clamp(2.1rem, 5vw, 3.3rem);
+      }
+      h2 {
+        font-size: 2.1rem;
+      }
+      h3 {
+        font-size: 1.4rem;
+        margin-top: 1.4em;
+      }
+      p {
+        margin: 0.3em 0 1em;
+        max-width: 70ch;
+      }
+      a {
+        color: var(--tl);
+      }
+      header {
+        background: var(--nv);
+        color: #fff;
+        padding: 64px 0 48px;
+      }
+      header h1 {
+        color: #fff;
+      }
+      header p {
+        color: #cfdbf2;
+        font-size: 1.15rem;
+      }
+      .w {
+        max-width: 1180px;
+        margin: 0 auto;
+        padding: 0 22px;
+      }
+      nav {
+        position: sticky;
+        top: 0;
+        z-index: 9;
+        background: #fffffff2;
+        border-bottom: 1px solid var(--bd);
+      }
+      nav .w {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 4px;
+        justify-content: center;
+      }
+      nav a {
+        white-space: normal;
+        padding: 14px 14px;
+        text-decoration: none;
+        color: var(--mu);
+        font-size: 1rem;
+        font-weight: 600;
+        border-bottom: 3px solid transparent;
+      }
+      nav a:hover,
+      nav a:focus-visible {
+        color: var(--nv);
+        border-color: var(--nv);
+        outline: none;
+      }
+      section {
+        padding: 56px 0;
+        border-bottom: 1px solid var(--bd);
+      }
+      .grid {
+        display: grid;
+        gap: 18px;
+        grid-template-columns: repeat(auto-fit, minmax(290px, 1fr));
+      }
+      .card {
+        background: var(--sf);
+        border: 1px solid var(--bd);
+        border-radius: var(--r);
+        padding: 22px;
+        box-shadow: 0 1px 3px #1d3b6e14;
+      }
+      .card h3 {
+        margin-top: 0;
+      }
+      .card p {
+        font-size: 1rem;
+        margin: 0 0 0.7em;
+      }
+      .ic {
+        font-size: 1.9rem;
+        display: block;
+      }
+      .box {
+        background: var(--sf);
+        border: 1px solid var(--bd);
+        border-radius: var(--r);
+        padding: 20px;
+        margin: 18px 0;
+      }
+      .note {
+        border-left: 5px solid var(--tl);
+        background: var(--sf);
+        padding: 16px 20px;
+        border-radius: 0 var(--r) var(--r) 0;
+        margin: 22px 0;
+        box-shadow: 0 1px 3px #1d3b6e14;
+      }
+      .note.a {
+        border-color: var(--am);
+      }
+      .note.r {
+        border-color: var(--rd);
+      }
+      .what {
+        display: grid;
+        grid-template-columns: auto 1fr;
+        gap: 4px 14px;
+        font-size: 1rem;
+        margin-top: 10px;
+      }
+      .what b {
+        color: var(--am);
+      }
+      .what span {
+        margin: 0;
+      }
+      .dw {
+        background: var(--sf);
+        border: 1px solid var(--bd);
+        border-radius: var(--r);
+        padding: 10px;
+      }
+      .dw svg {
+        display: block;
+        width: 100%;
+        height: auto;
+      }
+      svg text {
+        font-family: system-ui, sans-serif;
+        fill: #18212f;
+      }
+      .sm {
+        font-size: 16px;
+      }
+      .md {
+        font-size: 17px;
+        font-weight: 600;
+      }
+      .tw {
+        border: 1px solid var(--bd);
+        border-radius: var(--r);
+        background: var(--sf);
+      }
+      table {
+        border-collapse: collapse;
+        width: 100%;
+        table-layout: fixed;
+        font-size: 1rem;
+        line-height: 1.55;
+        overflow-wrap: anywhere;
+        min-width: 0 !important;
+      }
+      th,
+      td {
+        padding: 12px 14px;
+        text-align: left;
+        vertical-align: top;
+        border-bottom: 1px solid var(--bd);
+      }
+      th {
+        background: var(--nv);
+        color: #fff;
+        font-family: Georgia, serif;
+      }
+      tr:last-child td {
+        border: 0;
+      }
+      tr:nth-child(even) td {
+        background: #f8fafd;
+      }
+      td:first-child {
+        font-weight: 700;
+        color: var(--nv);
+      }
+      code,
+      pre {
+        font-family: ui-monospace, Consolas, monospace;
+        font-size: 0.82em;
+      }
+      code {
+        background: var(--tint);
+        padding: 1px 6px;
+        border-radius: 5px;
+        color: #133a73;
+      }
+      pre {
+        background: #0f1b2e;
+        color: #e4ecfa;
+        border-radius: var(--r);
+        padding: 16px;
+        white-space: pre-wrap;
+        overflow-wrap: anywhere;
+        margin: 12px 0;
+      }
+      pre code {
+        background: none;
+        color: inherit;
+        padding: 0;
+      }
+      .steps {
+        display: grid;
+        gap: 10px;
+        margin: 18px 0;
+      }
+      .st {
+        display: flex;
+        gap: 14px;
+        align-items: flex-start;
+        background: var(--sf);
+        border: 2px solid var(--bd);
+        border-radius: var(--r);
+        padding: 14px 16px;
+        cursor: pointer;
+        transition:
+          border-color 0.3s,
+          background 0.3s,
+          transform 0.3s;
+      }
+      .st.on {
+        border-color: var(--tl);
+        background: #eaf7f6;
+        transform: translateX(6px);
+      }
+      .st i {
+        flex: none;
+        width: 34px;
+        height: 34px;
+        border-radius: 50%;
+        background: var(--nv);
+        color: #fff;
+        font-style: normal;
+        font-weight: 700;
+        display: grid;
+        place-items: center;
+      }
+      .st.on i {
+        background: var(--tl);
+      }
+      .st p {
+        margin: 0;
+        font-size: 1rem;
+      }
+      .st b {
+        color: var(--nv);
+      }
+      .journey {
+        background: linear-gradient(135deg, #eef5ff, #f5fbfa);
+        border: 1px solid var(--bd);
+        border-radius: var(--r);
+        padding: 24px;
+        margin: 24px 0;
+      }
+      .journey-toolbar {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 10px;
+        align-items: center;
+        margin-bottom: 22px;
+      }
+      .journey-toolbar button {
+        border: 0;
+        border-radius: 999px;
+        padding: 10px 16px;
+        background: var(--nv);
+        color: #fff;
+        font: 600 0.9rem system-ui;
+        cursor: pointer;
+      }
+      .journey-toolbar button:hover,
+      .journey-toolbar button:focus-visible {
+        background: var(--tl);
+        outline: 3px solid #0d7a7440;
+      }
+      .journey-status {
+        color: var(--mu);
+        font-size: 1rem;
+        margin-left: auto;
+      }
+      .journey-track {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(135px, 1fr));
+        gap: 8px;
+        align-items: center;
+        padding: 10px 0 18px;
+      }
+      .journey-stage {
+        position: relative;
+        text-align: center;
+        cursor: pointer;
+      }
+      .journey-stage:not(:last-child)::after {
+        content: "→";
+        position: absolute;
+        right: -15px;
+        top: 18px;
+        color: var(--bd);
+        font-size: 1.4rem;
+        z-index: 0;
+      }
+      .stage-icon {
+        position: relative;
+        z-index: 1;
+        display: grid;
+        place-items: center;
+        width: 48px;
+        height: 48px;
+        margin: 0 auto 8px;
+        border: 3px solid var(--bd);
+        border-radius: 50%;
+        background: var(--sf);
+        font-size: 1.35rem;
+        transition: 0.3s ease;
+      }
+      .journey-stage.active .stage-icon,
+      .journey-stage.done .stage-icon {
+        border-color: var(--tl);
+        background: #d9f3f0;
+        box-shadow: 0 0 0 6px #0d7a741c;
+      }
+      .journey-stage.active .stage-icon {
+        animation: pulse-stage 1.2s infinite;
+      }
+      .journey-stage.active .stage-label,
+      .journey-stage.done .stage-label {
+        color: var(--tl);
+        font-weight: 700;
+      }
+      .stage-label {
+        display: block;
+        color: var(--mu);
+        font-size: 0.78rem;
+        line-height: 1.3;
+      }
+      .pdf-token {
+        display: flex;
+        gap: 12px;
+        align-items: center;
+        background: var(--sf);
+        border: 2px solid var(--am);
+        border-radius: var(--r);
+        padding: 14px 16px;
+        margin: 4px 0 18px;
+        color: var(--am);
+        font-size: 0.93rem;
+        font-weight: 700;
+      }
+      .pdf-token span:first-child {
+        font-size: 1.7rem;
+      }
+      .journey-detail {
+        display: grid;
+        grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+        gap: 16px;
+        background: var(--sf);
+        border-radius: var(--r);
+        padding: 18px;
+        border: 1px solid var(--bd);
+      }
+      .journey-detail h3 {
+        margin: 0 0 4px;
+      }
+      .journey-detail p {
+        font-size: 1rem;
+        margin: 0 0 10px;
+      }
+      .detail-label {
+        color: var(--am);
+        font-size: 0.86rem;
+        font-weight: 700;
+        letter-spacing: 0.05em;
+        text-transform: uppercase;
+      }
+      .detail-list {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 7px;
+        margin: 4px 0 12px;
+      }
+      .detail-list code {
+        font-size: 0.78em;
+      }
+      .detail-item {
+        display: block;
+        width: 100%;
+        padding: 7px 9px;
+        border-left: 3px solid var(--tl);
+        background: #f4faf9;
+        border-radius: 0 6px 6px 0;
+        font-size: 0.96rem;
+        line-height: 1.45;
+      }
+      .detail-item code {
+        color: var(--nv);
+        font-weight: 700;
+      }
+      .detail-item b {
+        color: var(--am);
+        font-size: 0.78rem;
+        letter-spacing: 0.04em;
+        text-transform: uppercase;
+      }
+      .lesson-box {
+        margin: 14px 0 18px;
+        padding: 14px 16px;
+        border-left: 4px solid var(--tl);
+        background: #f4faf9;
+        border-radius: 0 8px 8px 0;
+        font-size: 0.98rem;
+      }
+      .lesson-box b {
+        color: var(--nv);
+      }
+      .learning-path {
+        display: grid;
+        gap: 12px;
+        margin: 22px 0;
+      }
+      .learning-step {
+        display: grid;
+        grid-template-columns: 42px 1fr;
+        gap: 14px;
+        align-items: start;
+        background: var(--sf);
+        border: 1px solid var(--bd);
+        border-radius: var(--r);
+        padding: 16px;
+      }
+      .learning-step > b {
+        display: grid;
+        place-items: center;
+        width: 34px;
+        height: 34px;
+        border-radius: 50%;
+        background: var(--tl);
+        color: #fff;
+      }
+      .learning-step h3 {
+        margin: 0 0 4px;
+        font-size: 1.15rem;
+      }
+      .learning-step p {
+        margin: 0;
+        font-size: 0.92rem;
+      }
+      .file-reference {
+        display: grid;
+        gap: 12px;
+        margin-top: 20px;
+      }
+      .file-reference details {
+        background: var(--sf);
+        border: 1px solid var(--bd);
+        border-radius: var(--r);
+        padding: 14px 18px;
+      }
+      .file-reference summary {
+        color: var(--nv);
+        cursor: pointer;
+        font-weight: 700;
+      }
+      .file-reference details p {
+        font-size: 0.9rem;
+        margin: 12px 0 0;
+      }
+      @keyframes pulse-stage {
+        50% {
+          transform: scale(1.12);
+          box-shadow: 0 0 0 10px #0d7a7410;
+        }
+      }
+      .chunks {
+        display: flex;
+        margin: 14px 0;
+        font-size: 0.82rem;
+        text-align: center;
+      }
+      .chunks div {
+        padding: 14px 8px;
+        border-radius: 8px;
+        flex: 1;
+        color: #fff;
+        font-weight: 600;
+      }
+      .c1 {
+        background: #1d3b6e;
+      }
+      .c2 {
+        background: #0d7a74;
+        margin-left: -26px;
+        box-shadow: -26px 0 0 #b05f00 inset;
+      }
+      .c3 {
+        background: #6a4c9c;
+        margin-left: -26px;
+        box-shadow: -26px 0 0 #b05f00 inset;
+      }
+      ol.s {
+        list-style: none;
+        counter-reset: n;
+        padding: 0;
+      }
+      ol.s > li {
+        counter-increment: n;
+        background: var(--sf);
+        border: 1px solid var(--bd);
+        border-radius: var(--r);
+        padding: 18px 18px 18px 66px;
+        margin-bottom: 14px;
+        position: relative;
+      }
+      ol.s > li:before {
+        content: counter(n);
+        position: absolute;
+        left: 18px;
+        top: 16px;
+        width: 34px;
+        height: 34px;
+        border-radius: 50%;
+        background: var(--nv);
+        color: #fff;
+        font-weight: 700;
+        display: grid;
+        place-items: center;
+      }
+      ol.s pre {
+        margin-bottom: 0;
+      }
+      .tag {
+        font: 600 0.8rem system-ui;
+        background: var(--tint);
+        color: var(--nv);
+        border-radius: 99px;
+        padding: 3px 11px;
+        vertical-align: middle;
+      }
+      p[style*="font-size"] {
+        font-size: 1rem !important;
+      }
+      footer {
+        padding: 34px 0;
+        color: var(--mu);
+        font-size: 0.9rem;
+      }
+
+      /* Scroll Reveal Animation Classes */
+      .reveal {
+        opacity: 0;
+        transform: translateY(30px);
+        transition: opacity 0.8s ease-out, transform 0.8s cubic-bezier(0.2, 0.8, 0.2, 1);
+        will-change: opacity, transform;
+      }
+      .reveal.active {
+        opacity: 1;
+        transform: translateY(0);
+      }
+
+      /* Enhanced Hover Animations for Cards */
+      .card, .learning-step, .journey-detail {
+        transition: transform 0.3s ease, box-shadow 0.3s ease, border-color 0.3s ease;
+      }
+      .card:hover, .learning-step:hover {
+        transform: translateY(-6px);
+        box-shadow: 0 12px 24px #1d3b6e1a;
+        border-color: var(--tl);
+      }
+
+      /* Structural Improvements */
+      .section-wrapper {
+        display: flex;
+        flex-direction: column;
+        gap: 24px;
+      }
+      .image-placeholder {
+        width: 100%;
+        height: auto;
+        border-radius: var(--r);
+        background: linear-gradient(135deg, var(--tint), #fff);
+        border: 1px dashed var(--bd);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        color: var(--mu);
+        margin: 20px 0;
+        position: relative;
+        overflow: hidden;
+      }
+      .image-placeholder::after {
+        content: "";
+        position: absolute;
+        top: 0; left: -100%; width: 50%; height: 100%;
+        background: linear-gradient(90deg, transparent, rgba(255,255,255,0.4), transparent);
+        animation: shine 3s infinite;
+      }
+      .image-placeholder img {
+        width: 100%;
+        height: auto;
+        display: block;
+      }
+      @keyframes shine {
+        100% { left: 200%; }
+      }
+
+      @media (max-width: 600px) {
+        body {
+          font-size: 19px;
+        }
+        h2 {
+          font-size: 1.65rem;
+        }
+        section {
+          padding: 40px 0;
+        }
+        .journey {
+          padding: 16px;
+        }
+        .journey-detail {
+          grid-template-columns: 1fr;
+        }
+        .journey-status {
+          width: 100%;
+          margin-left: 0;
+        }
+      }
+      @media (prefers-reduced-motion: reduce) {
+        * {
+          animation: none !important;
+          transition: none !important;
+        }
+        html {
+          scroll-behavior: auto;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <header>
+      <div class="w">
+        <h1>How RAG works, explained with a real project</h1>
+        <p>
+          A complete beginner's guide to the
+          <code style="background: #ffffff22; color: #fff"
+            >chatbot-task / pdf chatbot</code
+          >
+          repository. You will learn what RAG is, why it exists, and how every
+          file in this project plays a part, from uploading a PDF to receiving a
+          cited answer.
+        </p>
+      </div>
+    </header>
+    <nav>
+      <div class="w">
+        <a href="#learn">Start here</a><a href="#s1">RAG in one minute</a
+        ><a href="#s2">RAG concepts</a><a href="#s3">Project map</a
+        ><a href="#s4">Question flow</a><a href="#journey">PDF animation</a
+        ><a href="#s5">Worked example</a><a href="#s6">File reference</a
+        ><a href="#s7">Run it</a>
+      </div>
+    </nav>
+    <main class="w">
+      <section id="learn" class="reveal">
+        <h2>Start here: the learning path</h2>
+        <p>
+          Do not begin by memorising filenames. Learn the idea first, then watch
+          the two code paths, then use the file reference to zoom in. This
+          project has two separate moments: <b>ingestion</b> happens when a PDF
+          is uploaded, while <b>question answering</b> happens every time you
+          type a question.
+        </p>
+        <div class="learning-path">
+          <div class="learning-step">
+            <b>1</b>
+            <div>
+              <h3>Understand RAG</h3>
+              <p>Retrieval-Augmented Generation means: find relevant passages first, then ask an LLM to answer using those passages.</p>
+            </div>
+          </div>
+          <div class="learning-step">
+            <b>2</b>
+            <div>
+              <h3>Separate the two timelines</h3>
+              <p>Upload time creates searchable knowledge. Chat time searches that knowledge and creates a grounded response. The PDF is not reread for every question.</p>
+            </div>
+          </div>
+          <div class="learning-step">
+            <b>3</b>
+            <div>
+              <h3>Follow the data, not just the files</h3>
+              <p>Track the same information changing shape: bytes → pages → chunks → vectors → retrieved chunks → prompt → streamed answer.</p>
+            </div>
+          </div>
+          <div class="learning-step">
+            <b>4</b>
+            <div>
+              <h3>Read the conductor last</h3>
+              <p>After you know the parts, read <code>rag_pipeline.py</code> and <code>app.py</code>. One orchestrates the work; the other handles the screen and user actions.</p>
+            </div>
+          </div>
+        </div>
+        <div class="note a">
+          <b>Use this guide in order:</b> RAG in one minute → concepts → project
+          map → upload path → question path → animation → file reference →
+          run/tests. The highlighted labels below match the real repository.
+        </div>
+      </section>
+      
+      <section id="s1" class="reveal">
+        <div class="section-wrapper">
+          <h2>1. RAG in one minute</h2>
+          <p>
+            Picture a <b>personal digital librarian</b>. You give it a pile of
+            PDFs. It reads every page and files each paragraph on shelves arranged
+            by <em>meaning</em>, not by alphabet. When you ask a question, it
+            walks to the right shelves, pulls out the few most relevant
+            paragraphs, and writes an answer using <em>only</em> those paragraphs,
+            adding footnotes such as "[1] report.pdf, page 7".
+          </p>
+          
+          <!-- New structured image block for visual hierarchy -->
+          <div class="image-placeholder">
+            <img src="RAG_Architecture.png" alt="RAG Architecture Diagram">
+          </div>
+
+          <div class="grid">
+            <div class="card">
+              <span class="ic">🔒</span>
+              <h3>Private and local</h3>
+              <p>
+                Everything runs on your own computer. No document is uploaded to
+                an online AI service and no API key is needed.
+              </p>
+            </div>
+            <div class="card">
+              <span class="ic">📑</span>
+              <h3>Every answer is checkable</h3>
+              <p>
+                The chatbot shows which file and page each fact came from, so you
+                can open the PDF and verify it.
+              </p>
+            </div>
+            <div class="card">
+              <span class="ic">🙅</span>
+              <h3>Honest about gaps</h3>
+              <p>
+                If your documents don't contain the answer, it replies "I couldn't
+                find the answer" instead of inventing one.
+              </p>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section id="s2" class="reveal">
+        <h2>2. RAG concepts, from simple to technical</h2>
+        <h3>The problem</h3>
+        <p>
+          An AI language model (an <b>LLM</b>) is like a brilliant writer who
+          has read a huge part of the internet but
+          <b>has never seen your PDFs</b>. If you ask about your company's leave
+          policy, it can't know the answer. Worse, it often produces a
+          confident, fluent, completely invented reply. This is called a
+          <b>hallucination</b>.
+        </p>
+        <h3>The idea behind RAG</h3>
+        <p>
+          <b>RAG = Retrieval-Augmented Generation.</b> Think of an
+          <b>open-book exam</b>. A student who memorized nothing can still score
+          well if allowed to look up the right page first. RAG does the same for
+          the AI in two moves:
+        </p>
+        <div class="grid">
+          <div class="card">
+            <h3 style="color: var(--tl)">① Retrieve</h3>
+            <p>
+              Search your documents and find the few paragraphs most related to
+              the question. This is a smart <em>search</em> step. No writing
+              yet.
+            </p>
+          </div>
+          <div class="card">
+            <h3 style="color: var(--am)">② Generate</h3>
+            <p>
+              Give the LLM those paragraphs together with the question and say
+              "answer using only this". This is the <em>writing</em> step.
+            </p>
+          </div>
+        </div>
+        <p>
+          "Augmented" means the AI's knowledge is boosted by extra material you
+          supply at the moment of asking.
+          <b>The AI itself is never retrained.</b> It reads fresh pages every
+          time.
+        </p>
+        <h3>Why not paste the whole PDF into the AI?</h3>
+        <p>
+          An LLM can only read a limited amount of text at once (its "context
+          window"; this project sets it to 8192 tokens, roughly 6,000 words). A
+          200-page PDF won't fit, and reading more text is slower. RAG sends
+          only the best 5 paragraphs, so it is faster and more focused.
+        </p>
+
+        <h3>The whole project in one animated picture</h3>
+        <p>
+          Watch the dots: the top row happens <b>once per PDF</b> (building the
+          library). The bottom row happens <b>every time you ask</b>. The
+          database in the middle connects them.
+        </p>
+        <div class="dw">
+          <svg
+            viewBox="0 0 960 330"
+            role="img"
+            aria-label="Animated RAG pipeline: indexing row and question-answering row sharing one database"
+          >
+            <defs>
+              <marker
+                id="ar"
+                markerWidth="8"
+                markerHeight="8"
+                refX="7"
+                refY="4"
+                orient="auto"
+              >
+                <path d="M0,0 L8,4 L0,8z" fill="#52607a" />
+              </marker>
+            </defs>
+            <text x="10" y="22" class="md" style="fill: #b05f00">
+              A. Indexing (once per PDF)
+            </text>
+            <g class="md" text-anchor="middle">
+              <rect
+                x="10"
+                y="40"
+                width="130"
+                height="60"
+                rx="10"
+                fill="#eaf0fa"
+                stroke="#1d3b6e"
+              />
+              <text x="75" y="75">PDF file</text>
+              <rect
+                x="200"
+                y="40"
+                width="130"
+                height="60"
+                rx="10"
+                fill="#eaf0fa"
+                stroke="#1d3b6e"
+              />
+              <text x="265" y="68">Read text</text>
+              <text x="265" y="88" class="sm">pdf_loader</text>
+              <rect
+                x="390"
+                y="40"
+                width="130"
+                height="60"
+                rx="10"
+                fill="#eaf0fa"
+                stroke="#1d3b6e"
+              />
+              <text x="455" y="68">Cut chunks</text>
+              <text x="455" y="88" class="sm">chunker</text>
+              <rect
+                x="580"
+                y="40"
+                width="130"
+                height="60"
+                rx="10"
+                fill="#eaf0fa"
+                stroke="#1d3b6e"
+              />
+              <text x="645" y="68">Make numbers</text>
+              <text x="645" y="88" class="sm">embeddings</text>
+              <rect
+                x="770"
+                y="30"
+                width="180"
+                height="150"
+                rx="14"
+                fill="#fff4e0"
+                stroke="#b05f00"
+                stroke-width="2"
+              />
+              <text x="860" y="95">Vector database</text>
+              <text x="860" y="116" class="sm">ChromaDB on disk</text>
+              <text x="860" y="136" class="sm">text + numbers + page</text>
+            </g>
+            <g stroke="#52607a" stroke-width="2" marker-end="url(#ar)">
+              <line x1="140" y1="70" x2="196" y2="70" />
+              <line x1="330" y1="70" x2="386" y2="70" />
+              <line x1="520" y1="70" x2="576" y2="70" />
+              <line x1="710" y1="70" x2="766" y2="70" />
+            </g>
+            <circle r="8" fill="#b05f00" cy="70">
+              <animate
+                attributeName="cx"
+                values="30;220;410;600;800;800"
+                keyTimes="0;.18;.36;.54;.72;1"
+                dur="7s"
+                repeatCount="indefinite"
+              />
+              <animate
+                attributeName="opacity"
+                values="1;1;1;1;0;0"
+                keyTimes="0;.5;.7;.75;.8;1"
+                dur="7s"
+                repeatCount="indefinite"
+              />
+            </circle>
+            <text x="10" y="215" class="md" style="fill: #0d7a74">
+              B. Asking (every question)
+            </text>
+            <g class="md" text-anchor="middle">
+              <rect
+                x="10"
+                y="235"
+                width="110"
+                height="60"
+                rx="10"
+                fill="#e6f5f3"
+                stroke="#0d7a74"
+              />
+              <text x="65" y="270">Question</text>
+              <rect
+                x="165"
+                y="235"
+                width="120"
+                height="60"
+                rx="10"
+                fill="#e6f5f3"
+                stroke="#0d7a74"
+              />
+              <text x="225" y="263">Make numbers</text>
+              <text x="225" y="283" class="sm">embed_query</text>
+              <rect
+                x="330"
+                y="235"
+                width="120"
+                height="60"
+                rx="10"
+                fill="#e6f5f3"
+                stroke="#0d7a74"
+              />
+              <text x="390" y="263">Find top 10</text>
+              <text x="390" y="283" class="sm">vector search</text>
+              <rect
+                x="495"
+                y="235"
+                width="120"
+                height="60"
+                rx="10"
+                fill="#e6f5f3"
+                stroke="#0d7a74"
+              />
+              <text x="555" y="263">Keep best 5</text>
+              <text x="555" y="283" class="sm">reranker</text>
+              <rect
+                x="660"
+                y="235"
+                width="140"
+                height="60"
+                rx="10"
+                fill="#e6f5f3"
+                stroke="#0d7a74"
+              />
+              <text x="730" y="263">AI writes answer</text>
+              <text x="730" y="283" class="sm">Ollama LLM</text>
+              <rect
+                x="845"
+                y="235"
+                width="105"
+                height="60"
+                rx="10"
+                fill="#e6f5f3"
+                stroke="#0d7a74"
+              />
+              <text x="897" y="260">Answer</text>
+              <text x="897" y="280" class="sm">+ pages</text>
+            </g>
+            <g stroke="#52607a" stroke-width="2" marker-end="url(#ar)">
+              <line x1="120" y1="265" x2="161" y2="265" />
+              <line x1="285" y1="265" x2="326" y2="265" />
+              <line x1="450" y1="265" x2="491" y2="265" />
+              <line x1="615" y1="265" x2="656" y2="265" />
+              <line x1="800" y1="265" x2="841" y2="265" />
+            </g>
+            <path
+              d="M390 235 C390 205 700 205 860 182"
+              fill="none"
+              stroke="#b05f00"
+              stroke-width="2"
+              stroke-dasharray="6 5"
+              marker-end="url(#ar)"
+            />
+            <text x="560" y="203" class="sm" text-anchor="middle">
+              looks up the library
+            </text>
+            <circle r="8" fill="#0d7a74" cy="265">
+              <animate
+                attributeName="cx"
+                values="30;190;355;520;690;880;880"
+                keyTimes="0;.16;.33;.5;.67;.84;1"
+                dur="8s"
+                repeatCount="indefinite"
+              />
+              <animate
+                attributeName="opacity"
+                values="1;1;1;1;1;0;0"
+                keyTimes="0;.3;.5;.7;.84;.9;1"
+                dur="8s"
+                repeatCount="indefinite"
+              />
+            </circle>
+          </svg>
+        </div>
+      </section>
+
+      <section id="s3" class="reveal">
+        <h2>3. Project map: what the folder contains</h2>
+        <p>
+          The project root is <code>chatbot-task/pdf chatbot/</code>. Read the
+          folders from the outside inward: the root launches the app, <code>src/</code>
+          contains reusable logic, <code>scripts/</code> contains command-line
+          tools, <code>tests/</code> proves behavior, and <code>data/</code>
+          contains the local ChromaDB index created while the app runs.
+        </p>
+        <div class="file-reference">
+          <details open>
+            <summary>Root files: app.py, pyproject.toml, requirements.txt</summary>
+            <p><code>app.py</code> is the Streamlit interface and entry point. <code>pyproject.toml</code> declares the package metadata, Python 3.12 requirement, pytest configuration, source path, and test markers. <code>requirements.txt</code> installs runtime and test libraries such as Streamlit, PyMuPDF, ChromaDB, sentence-transformers, Ollama, and pytest.</p>
+          </details>
+          <details>
+            <summary>src/pdf_chatbot/: the reusable application engine</summary>
+            <p>These modules implement settings, PDF reading, chunking, embeddings, vector storage, reranking, prompts, Ollama communication, shared data records, errors, and the orchestration pipeline. Keeping them outside <code>app.py</code> makes the core testable without opening a browser.</p>
+          </details>
+          <details>
+            <summary>scripts/: manual inspection and setup tools</summary>
+            <p><code>verify_setup.py</code> checks the local installation and models; <code>chat_cli.py</code> provides a terminal chat; <code>inspect_pdf.py</code> shows extracted pages/chunks; <code>search_pdf.py</code> shows raw vector-search matches. These are debugging windows into the same engine, not separate chatbot implementations.</p>
+          </details>
+          <details>
+            <summary>tests/: executable explanations of behavior</summary>
+            <p>The tests cover the UI helpers, configuration validation, PDF edge cases, chunk boundaries, model records, embeddings/LLM adapters, prompt construction, vector storage, reranking, and end-to-end pipeline behavior. <code>test_llm_live.py</code> is the exception: it needs a running Ollama model.</p>
+          </details>
+          <details>
+            <summary>data/: local runtime state, not source code</summary>
+            <p><code>data/chroma_db/</code> is the persistent vector database. It stores chunk text, embeddings, IDs, and metadata so a restart does not require re-indexing every PDF. It is generated state; the Python source explains how to recreate it.</p>
+          </details>
+        </div>
+        <h3>Core concepts you will see in the code</h3>
+        <p>
+          Six ideas make RAG work. Each one below says <b>what</b> it is,
+          <b>why</b> it's needed, <b>how</b> it works and <b>where</b> it lives
+          in this project.
+        </p>
+
+        <div class="box">
+          <h3 style="margin-top: 0">
+            3.1 Large Language Model (LLM): the writer
+            <span class="tag">llm.py</span>
+          </h3>
+          <p>
+            An LLM is a program trained on enormous amounts of text. Its core
+            skill is predicting a sensible next word, again and again, which
+            produces whole sentences and answers.
+          </p>
+          <div class="what">
+            <b>Why:</b
+            ><span
+              >It turns raw paragraphs into a clear, direct answer in plain
+              language.</span
+            ><b>How:</b
+            ><span
+              >It receives instructions plus text, then writes word by word. A
+              low "temperature" (0.1 here) makes it stick to the given facts
+              instead of being creative.</span
+            ><b>Here:</b
+            ><span
+              ><code>qwen3:4b-instruct</code>, a small model (4 billion
+              parameters) that runs on an ordinary computer through the free app
+              <b>Ollama</b>.</span
+            >
+          </div>
+        </div>
+
+        <div class="box">
+          <h3 style="margin-top: 0">
+            3.2 Embeddings: turning meaning into numbers
+            <span class="tag">embeddings.py</span>
+          </h3>
+          <p>
+            Computers can't compare "meaning" directly, but they are excellent
+            at comparing numbers. An <b>embedding model</b> reads a piece of
+            text and outputs a long list of numbers (here, 384) that acts like a
+            coordinate on a "map of meaning".
+            <b>Texts that mean similar things get nearby coordinates</b>, even
+            with different words: "annual leave" and "vacation days" sit close
+            together, while "server password" sits far away.
+          </p>
+          <div class="dw">
+            <svg
+              viewBox="0 0 760 300"
+              role="img"
+              aria-label="Meaning map: question lands near the vacation cluster"
+            >
+              <rect
+                x="1"
+                y="1"
+                width="758"
+                height="298"
+                rx="12"
+                fill="#f8fafd"
+                stroke="#d9e0ec"
+              />
+              <g fill="#1d3b6e">
+                <circle cx="150" cy="90" r="9" />
+                <circle cx="190" cy="125" r="9" />
+                <circle cx="125" cy="140" r="9" />
+              </g>
+              <text x="80" y="60" class="md">Leave and vacation</text>
+              <g fill="#6a4c9c">
+                <circle cx="560" cy="85" r="9" />
+                <circle cx="610" cy="115" r="9" />
+                <circle cx="540" cy="130" r="9" />
+              </g>
+              <text x="500" y="58" class="md">Salary and payment</text>
+              <g fill="#0d7a74">
+                <circle cx="330" cy="235" r="9" />
+                <circle cx="375" cy="215" r="9" />
+                <circle cx="410" cy="250" r="9" />
+              </g>
+              <text x="300" y="285" class="md">Security and passwords</text>
+              <circle cx="225" cy="165" r="14" fill="#b05f00">
+                <animate
+                  attributeName="r"
+                  values="12;16;12"
+                  dur="1.6s"
+                  repeatCount="indefinite"
+                />
+              </circle>
+              <text x="245" y="172" class="md" style="fill: #b05f00">
+                Your question
+              </text>
+              <circle
+                cx="160"
+                cy="118"
+                r="82"
+                fill="none"
+                stroke="#b05f00"
+                stroke-width="2"
+                stroke-dasharray="6 5"
+              >
+                <animate
+                  attributeName="r"
+                  values="30;90;90"
+                  keyTimes="0;.6;1"
+                  dur="3.5s"
+                  repeatCount="indefinite"
+                />
+                <animate
+                  attributeName="opacity"
+                  values="1;1;0"
+                  keyTimes="0;.7;1"
+                  dur="3.5s"
+                  repeatCount="indefinite"
+                />
+              </circle>
+              <text x="380" y="40" class="sm">
+                Real maps have 384 dimensions. This is a 2-D drawing of the
+                idea.
+              </text>
+            </svg>
+          </div>
+          <div class="what">
+            <b>Why:</b
+            ><span
+              >It lets the project search by <em>meaning</em>, which finds
+              answers keyword search would miss.</span
+            ><b>How:</b
+            ><span
+              >The same model embeds every chunk (once, when indexing) and every
+              question (each time you ask), so both live on the same map.
+              Vectors are scaled to length 1 (normalized) so similarity scores
+              are comparable.</span
+            ><b>Here:</b
+            ><span
+              >Model <code>BAAI/bge-small-en-v1.5</code>. It was trained to
+              expect a special instruction in front of <em>questions only</em>,
+              so the code adds
+              <code
+                >"Represent this sentence for searching relevant passages:
+                "</code
+              >
+              to questions but not to chunks.</span
+            >
+          </div>
+        </div>
+
+        <div class="box">
+          <h3 style="margin-top: 0">
+            3.3 Chunking: cutting text into index cards
+            <span class="tag">chunker.py</span>
+          </h3>
+          <p>
+            One page often covers several topics, so its single meaning-point is
+            a blurry average. Smaller pieces have a sharp meaning and match
+            questions better. So each page is cut into <b>chunks</b> of up to
+            1000 characters (about one or two paragraphs).
+          </p>
+          <div class="chunks" aria-label="Three overlapping chunks">
+            <div class="c1">Chunk 1</div>
+            <div class="c2">Chunk 2</div>
+            <div class="c3">Chunk 3</div>
+          </div>
+          <p style="font-size: 0.9rem; color: var(--mu)">
+            The orange strips show the <b>overlap</b>: the last ~150 characters
+            of one chunk are repeated at the start of the next.
+          </p>
+          <div class="what">
+            <b>Why:</b
+            ><span
+              >Sharper matches, shorter prompts. Overlap protects a fact that
+              would otherwise be sliced in half at a boundary.</span
+            ><b>How:</b
+            ><span
+              >Cut at the gentlest boundary available: paragraph first, then
+              sentence, then word, and raw characters only as a last resort.
+              Chunks never cross a page, so each one cites exactly one
+              page.</span
+            >
+          </div>
+        </div>
+
+        <div class="box">
+          <h3 style="margin-top: 0">
+            3.4 Vector store: the searchable filing cabinet
+            <span class="tag">vector_store.py</span>
+          </h3>
+          <p>
+            A vector store saves each chunk's text together with its number list
+            and a label (file name, page). Its special skill: given the number
+            list of a question, it quickly returns the stored entries that are
+            <b>closest</b> on the meaning map.
+          </p>
+          <div class="what">
+            <b>Why:</b
+            ><span
+              >Re-reading every chunk for every question would be far too slow.
+              The database finds nearest neighbours in milliseconds, and it
+              remembers everything after you close the app.</span
+            ><b>How:</b
+            ><span
+              >"Closeness" is measured by <b>cosine similarity</b>: 1.0 means
+              pointing the same way (same meaning), near 0 means
+              unrelated.</span
+            ><b>Here:</b
+            ><span
+              ><b>ChromaDB</b>, saved in <code>data/chroma_db</code>. No
+              separate server is needed.</span
+            >
+          </div>
+        </div>
+
+        <div class="box">
+          <h3 style="margin-top: 0">
+            3.5 Reranker: the careful second opinion
+            <span class="tag">reranker.py</span>
+          </h3>
+          <p>
+            The embedding search is fast but shallow, because it compares the
+            question and each chunk <em>separately</em>. A chunk that just
+            shares words like "days" can outrank the one that truly answers. A
+            <b>reranker</b> (a cross-encoder) reads the question and a chunk
+            <em>together</em> and gives a direct score for "does this answer
+            that?". It is more accurate but slower, so it only examines the 10
+            candidates from the fast search and keeps the best 5.
+          </p>
+          <div class="what">
+            <b>Why:</b
+            ><span
+              >Accuracy. The author's notes in the code report the right chunk
+              ranked first in 7 of 10 hard questions with search alone, and 10
+              of 10 with the reranker.</span
+            ><b>Here:</b
+            ><span
+              ><code>BAAI/bge-reranker-base</code>. Set
+              <code>RERANKER_MODEL=none</code> to skip it for speed.</span
+            >
+          </div>
+        </div>
+
+        <div class="box">
+          <h3 style="margin-top: 0">
+            3.6 Prompt: the written briefing <span class="tag">prompts.py</span>
+          </h3>
+          <p>
+            The prompt is the exact text sent to the LLM. It is the "augmented"
+            part of RAG. Here it contains (1) strict rules, (2) the last three
+            question/answer pairs, so follow-ups like "what about page 5?" make
+            sense, and (3) the five numbered sources plus your question.
+          </p>
+          <pre><code>Sources:
+&lt;source id="1" file="handbook.pdf" page="12"&gt; ...chunk text... &lt;/source&gt;
+&lt;source id="2" file="handbook.pdf" page="13"&gt; ...chunk text... &lt;/source&gt;
+Question: How many vacation days do I get?</code></pre>
+          <div class="what">
+            <b>Why:</b
+            ><span
+              >The rules make the model answer only from the sources, cite them
+              as <code>[1]</code>, and use one fixed "not found" sentence when
+              nothing fits. Text inside <code>&lt;source&gt;</code> tags is
+              declared to be data, never commands, which defends against a PDF
+              that says "ignore your instructions".</span
+            >
+          </div>
+        </div>
+      </section>
+
+      <section id="s4" class="reveal">
+        <h2>4. Step-by-step technical architecture</h2>
+        <p>
+          Click any step, or just watch: the highlight moves through what
+          happens when you ask a question. The table below it covers the full
+          journey, including the upload.
+        </p>
+        <div class="steps" id="player">
+          <div class="st on">
+            <i>1</i>
+            <p>
+              <b>Your question arrives.</b> <code>app.py</code> collects it, the
+              ticked documents, and recent chat history.
+            </p>
+          </div>
+          <div class="st">
+            <i>2</i>
+            <p>
+              <b>Question becomes numbers.</b> <code>embed_query()</code> adds
+              BGE's prefix and produces 384 numbers.
+            </p>
+          </div>
+          <div class="st">
+            <i>3</i>
+            <p>
+              <b>Fast search.</b> ChromaDB returns the 10 nearest chunks. For
+              follow-ups it also searches "previous question + this one".
+            </p>
+          </div>
+          <div class="st">
+            <i>4</i>
+            <p>
+              <b>Rerank.</b> The cross-encoder scores each question+chunk pair
+              and keeps the best 5.
+            </p>
+          </div>
+          <div class="st">
+            <i>5</i>
+            <p>
+              <b>Build the prompt.</b> Rules + history + numbered sources +
+              question are assembled.
+            </p>
+          </div>
+          <div class="st">
+            <i>6</i>
+            <p>
+              <b>The LLM writes.</b> Ollama streams the answer word by word, and
+              the app shows citations and source snippets.
+            </p>
+          </div>
+        </div>
+
+        <h3>Full journey: upload to answer</h3>
+        <div class="tw">
+          <table>
+            <tr>
+              <th>Code execution step</th>
+              <th>What it does technically</th>
+              <th>What it means in plain English</th>
+            </tr>
+            <tr>
+              <td>1. Upload<br /><code>app.py: process_uploads</code></td>
+              <td>
+                Streamlit hands over the PDF as bytes. A key (name+size+id)
+                prevents handling the same upload twice in a session.
+              </td>
+              <td>
+                You drop a file in the sidebar; the app notes it as received.
+              </td>
+            </tr>
+            <tr>
+              <td>2. Duplicate check<br /><code>ingest_pdf</code></td>
+              <td>
+                Computes a SHA-256 hash of the bytes and asks ChromaDB if it
+                exists.
+              </td>
+              <td>
+                A fingerprint of the file. Same contents, even renamed, means
+                it's already on the shelf.
+              </td>
+            </tr>
+            <tr>
+              <td>3. Validate and read<br /><code>load_pdf</code></td>
+              <td>
+                Checks extension, size (max 50 MB),
+                <code>%PDF-</code> signature, corruption, password. PyMuPDF
+                extracts text per page as paragraph blocks. Pages under 20
+                characters are skipped.
+              </td>
+              <td>
+                The librarian checks the book is real, undamaged and unlocked,
+                then copies out the text. Scanned images of text can't be read.
+              </td>
+            </tr>
+            <tr>
+              <td>4. Chunk<br /><code>chunk_document</code></td>
+              <td>
+                Splits each page into pieces up to 1000 characters with
+                150-character overlap, tagged with file, page and index.
+              </td>
+              <td>Pages become labeled index cards.</td>
+            </tr>
+            <tr>
+              <td>5. Embed chunks<br /><code>embed_documents</code></td>
+              <td>
+                The BGE model converts chunks into 384-number vectors, 32 at a
+                time, on the CPU.
+              </td>
+              <td>Every card gets a meaning fingerprint.</td>
+            </tr>
+            <tr>
+              <td>6. Store<br /><code>add_chunks</code></td>
+              <td>
+                Upserts vector, text and metadata into ChromaDB using IDs built
+                from the file hash.
+              </td>
+              <td>
+                Cards are filed. Filing the same card twice replaces it, and it
+                survives restarts.
+              </td>
+            </tr>
+            <tr>
+              <td>7. Ask<br /><code>answer()</code></td>
+              <td>
+                Gathers selected documents and history, calls
+                <code>answer_question</code>.
+              </td>
+              <td>You type a question and pick where to look.</td>
+            </tr>
+            <tr>
+              <td>8. Embed question<br /><code>embed_query</code></td>
+              <td>Prefix + question becomes a vector.</td>
+              <td>The question gets its own fingerprint.</td>
+            </tr>
+            <tr>
+              <td>9. Vector search<br /><code>store.search</code></td>
+              <td>
+                Top 10 by cosine similarity, optionally filtered to ticked PDFs.
+              </td>
+              <td>Grab the 10 cards closest in meaning.</td>
+            </tr>
+            <tr>
+              <td>10. Rerank<br /><code>reranker.rerank</code></td>
+              <td>
+                Cross-encoder keeps the best 5. The bare question's top match is
+                guaranteed a slot so a topic change isn't lost.
+              </td>
+              <td>A careful second reader re-sorts the pile.</td>
+            </tr>
+            <tr>
+              <td>11. Build prompt<br /><code>build_messages</code></td>
+              <td>
+                System rules, last 3 Q&amp;A pairs, numbered sources, question.
+              </td>
+              <td>A briefing note for the writer.</td>
+            </tr>
+            <tr>
+              <td>12. Generate<br /><code>stream_chat</code></td>
+              <td>
+                Sends it to local Ollama (temperature 0.1, 8192-token window)
+                and streams tokens back.
+              </td>
+              <td>The writer composes; you watch it appear.</td>
+            </tr>
+            <tr>
+              <td>13. Display<br /><code>app.py</code></td>
+              <td>
+                Streams text, finds <code>[n]</code> citations, shows a Sources
+                panel with file, page, relevance and a snippet.
+              </td>
+              <td>You get an answer with checkable footnotes.</td>
+            </tr>
+          </table>
+        </div>
+      </section>
+
+      <section id="journey" class="reveal">
+        <h2>5. Watch one PDF travel through the code</h2>
+        <p>
+          Press <b>Play</b> to follow the upload path. The PDF is not sent to
+          every file: each module receives a different representation of it,
+          such as bytes, extracted text, chunks, or vectors. Select a stage to
+          inspect the important variables and functions involved.
+        </p>
+        <div class="journey" aria-live="polite">
+          <div class="journey-toolbar">
+            <button type="button" id="journey-play">▶ Play</button>
+            <button type="button" id="journey-step">Step →</button>
+            <button type="button" id="journey-reset">↺ Reset</button>
+            <span class="journey-status" id="journey-status">
+              Ready: click Play or choose a stage
+            </span>
+          </div>
+          <div class="pdf-token">
+            <span>📄</span>
+            <span id="journey-payload">handbook.pdf · original upload bytes</span>
+          </div>
+          <div class="journey-track" id="journey-track">
+            <div class="journey-stage active" data-stage="0" tabindex="0" role="button">
+              <span class="stage-icon">🖥️</span><span class="stage-label">app.py<br />upload</span>
+            </div>
+            <div class="journey-stage" data-stage="1" tabindex="0" role="button">
+              <span class="stage-icon">🎼</span><span class="stage-label">rag_pipeline.py<br />ingest</span>
+            </div>
+            <div class="journey-stage" data-stage="2" tabindex="0" role="button">
+              <span class="stage-icon">📖</span><span class="stage-label">pdf_loader.py<br />text</span>
+            </div>
+            <div class="journey-stage" data-stage="3" tabindex="0" role="button">
+              <span class="stage-icon">✂️</span><span class="stage-label">chunker.py<br />pieces</span>
+            </div>
+            <div class="journey-stage" data-stage="4" tabindex="0" role="button">
+              <span class="stage-icon">🔢</span><span class="stage-label">embeddings.py<br />vectors</span>
+            </div>
+            <div class="journey-stage" data-stage="5" tabindex="0" role="button">
+              <span class="stage-icon">🗄️</span><span class="stage-label">vector_store.py<br />ChromaDB</span>
+            </div>
+            <div class="journey-stage" data-stage="6" tabindex="0" role="button">
+              <span class="stage-icon">❓</span><span class="stage-label">app.py<br />question</span>
+            </div>
+            <div class="journey-stage" data-stage="7" tabindex="0" role="button">
+              <span class="stage-icon">🔎</span><span class="stage-label">retrieve +<br />rerank</span>
+            </div>
+            <div class="journey-stage" data-stage="8" tabindex="0" role="button">
+              <span class="stage-icon">📝</span><span class="stage-label">prompts.py<br />briefing</span>
+            </div>
+            <div class="journey-stage" data-stage="9" tabindex="0" role="button">
+              <span class="stage-icon">🤖</span><span class="stage-label">llm.py<br />answer</span>
+            </div>
+          </div>
+          <div class="journey-detail">
+            <div>
+              <h3 id="journey-file">app.py</h3>
+              <p id="journey-explanation">
+                The interface receives the uploaded PDF and starts ingestion.
+              </p>
+              <div class="lesson-box" id="journey-lesson"></div>
+              <span class="detail-label">What arrives here</span>
+              <p id="journey-arrival">UploadedFile: name, size, and bytes</p>
+            </div>
+            <div>
+              <span class="detail-label">Important variables</span>
+              <div class="detail-list" id="journey-vars"></div>
+              <span class="detail-label">Important functions</span>
+              <div class="detail-list" id="journey-functions"></div>
+              <p id="journey-function-note">
+                Select a stage to see what each item means.
+              </p>
+            </div>
+          </div>
+        </div>
+        <div class="note">
+          <b>Key idea:</b> ingestion runs once when a new PDF is uploaded. Later,
+          a question does not reread the PDF; it embeds the question, searches
+          the stored vectors, reranks the matching chunks, and sends only those
+          sources to the LLM.
+        </div>
+      </section>
+
+      <section id="s5" class="reveal">
+        <h2>6. A worked example</h2>
+        <p>
+          This is an <b>illustration</b> (the numbers are made up) of one
+          question travelling through the system. Suppose you uploaded
+          <code>handbook.pdf</code>.
+        </p>
+        <div class="grid">
+          <div class="card">
+            <h3>Indexing</h3>
+            <p>
+              Page 12 says: "Full-time staff receive 24 days of paid annual
+              leave per year." The chunker keeps it as a chunk labeled
+              <i>handbook.pdf, page 12, chunk 0</i>. The embedder turns it into
+              384 numbers. ChromaDB stores text, numbers and label.
+            </p>
+          </div>
+          <div class="card">
+            <h3>Asking</h3>
+            <p>
+              You type: <b>"How many vacation days do I get?"</b> No word
+              matches "annual leave", but the meaning-numbers are close, so the
+              page-12 chunk lands in the top 10.
+            </p>
+          </div>
+          <div class="card">
+            <h3>Reranking</h3>
+            <p>
+              Another chunk about "working days in a month" shares the word
+              "days" and ranks high in search. The reranker sees it doesn't
+              answer the question and moves page 12 to first place.
+            </p>
+          </div>
+          <div class="card">
+            <h3>Generating</h3>
+            <p>
+              The LLM reads the five sources and replies: "Full-time staff
+              receive 24 days of paid annual leave per year [1]." The Sources
+              panel shows <i>handbook.pdf, page 12</i> and marks <b>[1]</b> as
+              cited.
+            </p>
+          </div>
+        </div>
+        <div class="note">
+          <b>The key insight of RAG:</b> the LLM never "knew" your policy. It
+          was handed the right paragraph at the right moment. Quality depends
+          mostly on <b>retrieval</b>. If the right chunk isn't found, even a
+          great LLM can't answer correctly, which is why this project invests in
+          chunking, the BGE prefix and a reranker.
+        </div>
+        <div class="note a">
+          <b>Follow-up questions:</b> if you then ask "and for part-time
+          staff?", that question alone is vague. <code>retrieve()</code> also
+          searches with the previous question prepended, keeps each chunk's best
+          score, and reranks against the combined query. This is how the bot
+          resolves words like "it" and "that".
+        </div>
+      </section>
+
+      <section id="s6" class="reveal">
+        <h2>7. File and code reference</h2>
+        <div class="note r">
+          <b>Libraries actually used:</b> this project does <em>not</em> use
+          LangChain or PyPDF. It uses <b>PyMuPDF</b> (PDFs),
+          <b>sentence-transformers + PyTorch</b> (embedding and reranking
+          models), <b>ChromaDB</b> (database), <b>Ollama</b> (LLM) and
+          <b>Streamlit</b> (web page). Chunking, retrieval logic and prompts are
+          hand-written.
+        </div>
+        <div class="tw">
+          <table style="min-width: 640px">
+            <tr>
+              <th>Library</th>
+              <th>Job</th>
+              <th>Why it's here</th>
+            </tr>
+            <tr>
+              <td>Streamlit</td>
+              <td>Builds the web page from Python</td>
+              <td>
+                Chat box, sidebar, upload button with no HTML or JavaScript.
+              </td>
+            </tr>
+            <tr>
+              <td>PyMuPDF</td>
+              <td>Extracts text with page numbers</td>
+              <td>Fast, and reads from in-memory bytes like uploads.</td>
+            </tr>
+            <tr>
+              <td>sentence-transformers, torch</td>
+              <td>Run the embedding and reranker models</td>
+              <td>Meaning-numbers and relevance scores on a normal CPU.</td>
+            </tr>
+            <tr>
+              <td>ChromaDB</td>
+              <td>Stores and searches vectors</td>
+              <td>Server-free, saves to disk.</td>
+            </tr>
+            <tr>
+              <td>ollama, httpx</td>
+              <td>Talk to the local LLM</td>
+              <td>Send prompts, receive streamed text, catch timeouts.</td>
+            </tr>
+            <tr>
+              <td>python-dotenv</td>
+              <td>Reads optional <code>.env</code></td>
+              <td>Change settings without editing code.</td>
+            </tr>
+          </table>
+        </div>
+
+        <h3>Where the code lives</h3>
+        <p>
+          Use this as a reference after watching the flow. Each row answers
+          three questions: what enters the function, what it changes, and what
+          comes out. Private helpers with a leading underscore are implementation
+          details called by the public functions above them.
+        </p>
+        <div class="tw">
+          <table style="min-width: 900px">
+            <tr>
+              <th>File / symbol</th>
+              <th>Purpose</th>
+              <th>Input → output</th>
+            </tr>
+            <tr>
+              <td><code>app.py</code><br /><code>process_uploads</code>, <code>answer</code></td>
+              <td>Connects widgets to the pipeline, keeps session state, streams text, and renders citations.</td>
+              <td>Streamlit files/questions → UI notices, chat messages, source panels.</td>
+            </tr>
+            <tr>
+              <td><code>config.py</code><br /><code>Settings</code>, <code>load_settings</code></td>
+              <td>Owns every tunable value and validates environment overrides.</td>
+              <td>Defaults + <code>.env</code> + environment → immutable settings.</td>
+            </tr>
+            <tr>
+              <td><code>pdf_loader.py</code><br /><code>load_pdf</code>, <code>extract_page_text</code></td>
+              <td>Rejects invalid/encrypted/scanned PDFs and extracts readable page paragraphs.</td>
+              <td>PDF bytes → <code>LoadedDocument</code> containing <code>PageText</code>.</td>
+            </tr>
+            <tr>
+              <td><code>chunker.py</code><br /><code>chunk_document</code>, <code>chunk_text</code></td>
+              <td>Creates small searchable pieces without losing page identity or boundary context.</td>
+              <td>Pages → overlapping <code>Chunk</code> records.</td>
+            </tr>
+            <tr>
+              <td><code>embeddings.py</code><br /><code>embed_documents</code>, <code>embed_query</code></td>
+              <td>Uses BGE to represent text as normalized meaning vectors; query and document prefixes differ.</td>
+              <td>Text → 384-number vectors.</td>
+            </tr>
+            <tr>
+              <td><code>vector_store.py</code><br /><code>add_chunks</code>, <code>search</code></td>
+              <td>Persists vectors in ChromaDB and converts nearest-neighbor results back into source-aware objects.</td>
+              <td>Chunks/vectors/question → disk records or <code>RetrievedChunk</code>.</td>
+            </tr>
+            <tr>
+              <td><code>reranker.py</code><br /><code>Reranker.rerank</code></td>
+              <td>Reads each question/chunk pair together for a more accurate final order.</td>
+              <td>Question + ~10 candidates → best <code>top_k</code> candidates with scores.</td>
+            </tr>
+            <tr>
+              <td><code>prompts.py</code><br /><code>build_messages</code>, <code>format_sources</code></td>
+              <td>Numbers sources, trims history, and gives the LLM grounding/citation rules.</td>
+              <td>Rules + history + retrieved chunks + question → chat messages.</td>
+            </tr>
+            <tr>
+              <td><code>llm.py</code><br /><code>OllamaLLM.stream_chat</code></td>
+              <td>Checks Ollama and translates streamed model output/errors into app-specific behavior.</td>
+              <td>Messages → answer text pieces.</td>
+            </tr>
+            <tr>
+              <td><code>rag_pipeline.py</code><br /><code>RAGPipeline.ingest_pdf</code>, <code>answer_question</code></td>
+              <td>Coordinates the complete upload and question workflows; cleans up partial writes and supports dependency injection in tests.</td>
+              <td>Bytes or question → <code>IngestResult</code> or <code>StreamingAnswer</code>.</td>
+            </tr>
+            <tr>
+              <td><code>models.py</code><br /><code>PageText</code>, <code>Chunk</code>, <code>Answer</code></td>
+              <td>Defines immutable data contracts so source/page metadata survives every handoff.</td>
+              <td>Validated fields → typed records and citation helpers.</td>
+            </tr>
+            <tr>
+              <td><code>exceptions.py</code><br /><code>PDFChatbotError</code></td>
+              <td>Separates technical detail for logs/tests from friendly <code>user_message</code> text for the UI.</td>
+              <td>Failure detail → catchable, understandable error.</td>
+            </tr>
+          </table>
+        </div>
+        <div class="grid">
+          <div class="card">
+            <h3>app.py <span class="tag">interface</span></h3>
+            <p>
+              <b>What:</b> the Streamlit page.
+              <b>Why it's careful:</b> Streamlit re-runs the whole script on
+              every click, so the heavy pipeline is created once with
+              <code>@st.cache_resource</code>, and chat history is kept in
+              <code>st.session_state</code>. It contains no AI logic.
+            </p>
+            <pre><code>@st.cache_resource
+def get_pipeline():
+    return RAGPipeline(load_settings())</code></pre>
+          </div>
+          <div class="card">
+            <h3>config.py <span class="tag">settings</span></h3>
+            <p>
+              <b>What:</b> one <code>Settings</code> object with every number
+              (chunk size 1000, overlap 150, top_k 5, models).
+              <b>How:</b> defaults, then <code>.env</code>, then real
+              environment variables. Invalid values raise a clear
+              <code>ConfigError</code>.
+            </p>
+          </div>
+          <div class="card">
+            <h3>pdf_loader.py <span class="tag">reading</span></h3>
+            <p>
+              <b>What:</b> validates and reads the PDF. <b>Why blocks:</b> PDFs
+              store positioned lines, not sentences, so it reads paragraph
+              <em>blocks</em>, joins their lines and repairs hyphenated words.
+            </p>
+            <pre><code>page.get_text("blocks", sort=True)</code></pre>
+          </div>
+          <div class="card">
+            <h3>chunker.py <span class="tag">cutting</span></h3>
+            <p>
+              <b>How:</b> <code>_split</code> breaks text at paragraph, then
+              sentence, then word boundaries. <code>_merge</code> packs pieces
+              up to the size limit and starts each new chunk with an overlap
+              tail from the previous one.
+            </p>
+          </div>
+          <div class="card">
+            <h3>embeddings.py <span class="tag">numbers</span></h3>
+            <p>
+              <b>What:</b> <code>Embedder</code> with
+              <code>embed_documents</code> (no prefix) and
+              <code>embed_query</code> (with prefix). It loads the model from
+              local files first and caches it, because loading takes seconds.
+            </p>
+          </div>
+          <div class="card">
+            <h3>vector_store.py <span class="tag">database</span></h3>
+            <p>
+              <b>How:</b> <code>PersistentClient</code> saves to disk;
+              <code>upsert</code> with hash-based IDs avoids duplicates; a
+              <code>where</code> filter limits search to ticked PDFs; score = 1
+              − cosine distance.
+            </p>
+            <pre><code>collection.query(
+  query_embeddings=[vec], n_results=10)</code></pre>
+          </div>
+          <div class="card">
+            <h3>reranker.py <span class="tag">re-sorting</span></h3>
+            <p>
+              <b>How:</b> builds (question, chunk) pairs, calls the
+              cross-encoder's <code>predict</code>, sorts by score, returns the
+              best <code>top_k</code>.
+            </p>
+          </div>
+          <div class="card">
+            <h3>prompts.py <span class="tag">instructions</span></h3>
+            <p>
+              <b>What:</b> the system rules, the fixed "not found" sentence, and
+              the functions that number the sources and trim history to the last
+              3 turns.
+            </p>
+          </div>
+          <div class="card">
+            <h3>llm.py <span class="tag">writer</span></h3>
+            <p>
+              <b>How:</b> <code>stream_chat</code> uses
+              <code>stream=True</code> so text appears gradually (CPU answers
+              can take 10-30 s). <code>think=False</code> asks for the answer
+              without the model's reasoning. <code>check_ready()</code> turns
+              "Ollama not running" into a friendly message.
+            </p>
+          </div>
+          <div class="card">
+            <h3>rag_pipeline.py <span class="tag">conductor</span></h3>
+            <p>
+              <b>What:</b> <code>RAGPipeline</code> ties it all together.
+              <code>ingest_pdf()</code> = hash, load, chunk, store (cleaning up
+              if storing fails). <code>answer_question()</code> = retrieve,
+              build prompt, stream. Parts can be swapped for fakes in tests.
+            </p>
+          </div>
+          <div class="card">
+            <h3>models.py, exceptions.py <span class="tag">shared</span></h3>
+            <p>
+              Small immutable records (<code>Chunk</code>,
+              <code>RetrievedChunk</code>, <code>Answer</code>) carry file and
+              page through every step, which makes citations possible. Each
+              error type holds a plain-English <code>user_message</code>.
+            </p>
+          </div>
+          <div class="card">
+            <h3>scripts/ and tests/ <span class="tag">tools</span></h3>
+            <p>
+              <code>verify_setup.py</code> checks your install.
+              <code>chat_cli.py</code> chats in the terminal.
+              <code>inspect_pdf.py</code> shows extracted text and chunks.
+              <code>search_pdf.py</code> shows raw search hits.
+              <code>tests/</code> is a pytest suite using in-memory PDFs.
+            </p>
+          </div>
+        </div>
+      </section>
+
+      <section id="s7" class="reveal">
+        <h2>8. Run, test, and troubleshoot</h2>
+        <div class="note">
+          <b>No API keys required.</b> The project was verified on Python 3.12
+          and Windows 11 (CPU only). Commands are PowerShell; macOS/Linux
+          alternatives are noted.
+        </div>
+        <ol class="s">
+          <li>
+            <b>Install Python 3.12</b> (the project requires 3.12.x). Check:
+            <code>python --version</code>
+          </li>
+          <li>
+            <b>Get the code.</b>
+            <pre><code>git clone https://github.com/KrishnaPankhania06/chatbot-task.git
+cd "chatbot-task/pdf chatbot"</code></pre>
+          </li>
+          <li>
+            <b>Create a virtual environment</b> (an isolated box for this
+            project's packages).
+            <pre><code>python -m venv .venv
+.\.venv\Scripts\Activate.ps1      # macOS/Linux: source .venv/bin/activate</code></pre>
+          </li>
+          <li>
+            <b>Install dependencies.</b> This is a large download because of
+            PyTorch.
+            <pre><code>python -m pip install -r requirements.txt</code></pre>
+          </li>
+          <li>
+            <b>Install Ollama</b> from
+            <a href="https://ollama.com">ollama.com</a>, start it, then download
+            the language model:
+            <pre><code>ollama pull qwen3:4b-instruct</code></pre>
+          </li>
+          <li>
+            <b>(Optional) environment variables.</b> Create a file named
+            <code>.env</code> next to <code>app.py</code>. Every value has a
+            default, so skip this unless you want changes. The code mentions a
+            <code>.env.example</code>, but the repository doesn't contain one.
+            <pre><code>LLM_MODEL=qwen3:4b-instruct
+TOP_K=5
+CHUNK_SIZE=1000
+RERANKER_MODEL=none        # faster, slightly less accurate
+OLLAMA_HOST=http://localhost:11434</code></pre>
+          </li>
+          <li>
+            <b>(Recommended) verify the setup.</b> Internet is needed once,
+            because the embedding and reranker models download from Hugging Face
+            on first use.
+            <pre><code>python scripts/verify_setup.py</code></pre>
+          </li>
+          <li>
+            <b>Start the app.</b>
+            <pre><code>streamlit run app.py</code></pre>
+            It opens at <code>http://localhost:8501</code>. The first start can
+            take a minute or two.
+          </li>
+          <li>
+            <b>Use it.</b> Upload PDFs in the sidebar, wait for the "chunks from
+            pages" message, tick the documents to search, and ask. Open
+            <b>Sources</b> under an answer to check the pages.
+          </li>
+          <li>
+            <b>(Optional) run the tests.</b>
+            <pre><code>python -m pytest -m "not model and not ollama"</code></pre>
+          </li>
+        </ol>
+        <h3>Troubleshooting</h3>
+        <div class="tw">
+          <table style="min-width: 520px">
+            <tr>
+              <th>Message</th>
+              <th>Fix</th>
+            </tr>
+            <tr>
+              <td>Cannot reach Ollama</td>
+              <td>Start the Ollama app and wait up to 20 seconds.</td>
+            </tr>
+            <tr>
+              <td>Model is not installed</td>
+              <td>Run <code>ollama pull qwen3:4b-instruct</code>.</td>
+            </tr>
+            <tr>
+              <td>No text / scanned PDF</td>
+              <td>
+                The app has no OCR and can't read images of text. Use a PDF with
+                selectable text.
+              </td>
+            </tr>
+            <tr>
+              <td>Slow answers</td>
+              <td>
+                Normal on CPU. Try <code>RERANKER_MODEL=none</code>, fewer
+                documents, or a smaller model.
+              </td>
+            </tr>
+          </table>
+        </div>
+      </section>
+    </main>
+    <footer>
+      <div class="w">
+        Built from the source files of KrishnaPankhania06/chatbot-task.
+      </div>
+    </footer>
+    <script>
+      (function () {
+        var s = document.querySelectorAll("#player .st"),
+          i = 0,
+          t;
+        function go(n) {
+          s[i].classList.remove("on");
+          i = n;
+          s[i].classList.add("on");
+        }
+        function run() {
+          t = setInterval(function () {
+            go((i + 1) % s.length);
+          }, 2600);
+        }
+        s.forEach(function (e, n) {
+          e.addEventListener("click", function () {
+            clearInterval(t);
+            go(n);
+          });
+        });
+        if (!matchMedia("(prefers-reduced-motion: reduce)").matches) run();
+      })();
+    </script>
+    <script>
+      (function () {
+        var stages = [
+          {
+            file: "app.py",
+            payload: "handbook.pdf · original upload bytes",
+            arrival: "UploadedFile: name, size, and bytes",
+            explanation: "The interface receives the upload, checks whether this session already handled it, and calls the pipeline.",
+            vars: [
+              ["uploaded_file", "the Streamlit PDF object holding name, size, and bytes"],
+              ["file_key", "a session-level identity used to avoid processing one upload twice"],
+              ["chat_history", "messages kept across Streamlit reruns"]
+            ],
+            funcs: [
+              ["process_uploads()", "passes each new file to pipeline.ingest_pdf()"],
+              ["get_pipeline()", "creates and caches the RAGPipeline"]
+            ]
+          },
+          {
+            file: "rag_pipeline.py · ingest_pdf()",
+            payload: "upload bytes + filename · ingestion request",
+            arrival: "bytes, filename → load/chunk/store workflow",
+            explanation: "The conductor receives the upload from app.py, hashes it to detect duplicates, and calls the ingestion modules in order.",
+            vars: [
+              ["file_hash", "SHA-256 identity used to skip duplicates and build stable IDs"],
+              ["doc", "LoadedDocument returned by the PDF loader"],
+              ["chunks", "Chunk records ready to be embedded and stored"]
+            ],
+            funcs: [
+              ["ingest_pdf()", "coordinates hash → load → chunk → store"],
+              ["has_document()", "checks whether this exact file is already indexed"],
+              ["add_chunks()", "writes the new chunks, removing partial data if a write fails"]
+            ]
+          },
+          {
+            file: "pdf_loader.py",
+            payload: "handbook.pdf · validated page text",
+            arrival: "bytes → list[PageText] with page numbers",
+            explanation: "The loader validates the PDF signature, size, password state, and readable text before extracting paragraph blocks.",
+            vars: [
+              ["PDF_SIGNATURE", "the %PDF- marker checked near the beginning of the bytes"],
+              ["page_number", "the human-readable, 1-based page number"],
+              ["pages_without_text", "page numbers skipped because text was missing"]
+            ],
+            funcs: [
+              ["load_pdf()", "validates bytes, opens PyMuPDF, and returns LoadedDocument"],
+              ["extract_page_text()", "reads text blocks, joins them as paragraphs, and cleans them"],
+              ["compute_file_hash()", "creates a SHA-256 identity for duplicate detection"]
+            ]
+          },
+          {
+            file: "chunker.py",
+            payload: "page text · overlapping chunks",
+            arrival: "PageText → Chunk(text, page, index)",
+            explanation: "Long pages are split at sensible boundaries. The overlap keeps context when an answer crosses a chunk boundary.",
+            vars: [
+              ["chunk_size = 1000", "maximum characters allowed in one searchable piece"],
+              ["chunk_overlap = 150", "tail copied into the next piece to preserve context"],
+              ["chunk_index", "position of this piece within its page"]
+            ],
+            funcs: [
+              ["chunk_document()", "converts every PageText into metadata-rich Chunk records"],
+              ["_split()", "breaks long text at paragraph, sentence, word, then character boundaries"],
+              ["_merge()", "packs pieces and adds the overlap tail"]
+            ]
+          },
+          {
+            file: "embeddings.py",
+            payload: "chunks · 384-number meaning vectors",
+            arrival: "list[str] → list[list[float]]",
+            explanation: "The local BGE model turns each chunk into a numerical meaning fingerprint that can be compared with a question.",
+            vars: [
+              ["model_name", "the BGE sentence-transformer loaded on the CPU"],
+              ["BATCH_SIZE = 32", "number of texts encoded per model call"],
+              ["vectors", "384-number meaning fingerprints"]
+            ],
+            funcs: [
+              ["embed_documents()", "embeds stored chunks without a query prefix"],
+              ["embed_query()", "adds the BGE search instruction and embeds the question"],
+              ["_encode()", "runs normalized model inference and returns Python lists"]
+            ]
+          },
+          {
+            file: "vector_store.py",
+            payload: "vectors + text + metadata · saved on disk",
+            arrival: "ChromaDB collection with hash-based IDs",
+            explanation: "ChromaDB stores the vectors and their source metadata. Upsert makes repeated ingestion safe and persistent.",
+            vars: [
+              ["collection", "the persistent ChromaDB collection"],
+              ["chunk_id", "stable hash-page-index ID used for upsert"],
+              ["metadata", "source, page, chunk index, and file hash beside each vector"]
+            ],
+            funcs: [
+              ["add_chunks()", "embeds and upserts chunks in safe batches"],
+              ["search()", "embeds a question and returns nearest chunks with similarity"],
+              ["list_documents()", "groups stored metadata into one summary per PDF"]
+            ]
+          },
+          {
+            file: "app.py · question",
+            payload: "user question + selected document hashes",
+            arrival: "question, checked PDFs, and recent chat history",
+            explanation: "The chat box collects the question and which indexed PDFs are enabled, then passes them to answer_question().",
+            vars: [
+              ["question", "the text typed into st.chat_input"],
+              ["selected", "file hashes for the checked documents"],
+              ["history", "ChatMessage records from the current conversation"]
+            ],
+            funcs: [
+              ["answer()", "collects UI inputs and calls the pipeline"],
+              ["render_message()", "displays text, errors, sources, and elapsed time"],
+              ["render_sources()", "shows file, page, score, and a snippet"]
+            ]
+          },
+          {
+            file: "rag_pipeline.py · retrieve()",
+            payload: "question · top 5 grounded source chunks",
+            arrival: "question vector → candidates → reranked sources",
+            explanation: "The pipeline searches the plain question and, for follow-ups, a question combined with the previous question. It then reranks the candidates.",
+            vars: [
+              ["top_k = 5", "number of final sources sent to the prompt"],
+              ["candidates", "up to ten vector-search results awaiting reranking"],
+              ["plain_top_id", "best result for the bare question, protected for topic changes"]
+            ],
+            funcs: [
+              ["retrieve()", "combines searches, deduplicates hits, and selects sources"],
+              ["search()", "gets nearest chunks by vector similarity"],
+              ["rerank()", "scores question/chunk pairs and keeps the strongest results"]
+            ]
+          },
+          {
+            file: "prompts.py",
+            payload: "retrieved chunks · numbered source briefing",
+            arrival: "rules, recent history, sources, and question",
+            explanation: "This module turns the selected chunks into safe source tags, adds citation rules, and tells the LLM exactly what question to answer.",
+            vars: [
+              ["SYSTEM_PROMPT", "grounding, citation, and prompt-injection safety rules"],
+              ["NOT_FOUND_ANSWER", "the exact response used when no source supports an answer"],
+              ["history_turns = 3", "maximum earlier question/answer pairs included"]
+            ],
+            funcs: [
+              ["format_sources()", "numbers chunks and wraps them in source tags"],
+              ["build_messages()", "assembles system rules, history, sources, and question"],
+              ["_recent_history()", "keeps recent user-first conversation turns"]
+            ]
+          },
+          {
+            file: "llm.py",
+            payload: "prompt · streamed cited answer",
+            arrival: "messages: rules, history, sources, question",
+            explanation: "Ollama receives the prepared briefing and streams answer pieces back through the pipeline to app.py.",
+            vars: [
+              ["model", "the Ollama model name, normalized with :latest when needed"],
+              ["_options", "temperature and context-window settings sent to Ollama"],
+              ["response_text", "the answer pieces accumulated by StreamingAnswer"]
+            ],
+            funcs: [
+              ["build_messages()", "creates rules, history, sources, and question"],
+              ["stream_chat()", "yields Ollama response pieces as they arrive"],
+              ["check_ready()", "checks the server and whether the model is installed"]
+            ]
+          }
+        ];
+        var lessons = [
+          {
+            what: "This is the user-facing boundary. Streamlit gives the app an UploadedFile, and the app turns a click or question into a Python call.",
+            why: "Keeping UI code here prevents browser details from leaking into the RAG engine and lets the engine be tested without Streamlit.",
+            how: "process_uploads() filters files using upload_key(), then calls pipeline.ingest_pdf(). For questions, answer() collects selected hashes and chat history before calling answer_question()."
+          },
+          {
+            what: "ingest_pdf() is the upload-time coordinator. It is the bridge between the screen and the lower-level PDF, chunking, embedding, and storage modules.",
+            why: "One coordinator gives the workflow one place to enforce duplicate protection and clean up if storage fails halfway through.",
+            how: "It computes a hash, stops for an existing document, loads pages, creates chunks, and calls store.add_chunks()."
+          },
+          {
+            what: "The loader turns raw bytes into readable PageText records while preserving the original filename and 1-based page number.",
+            why: "A language model cannot search PDF layout bytes directly; it needs clean text, and citations need page numbers.",
+            how: "It checks extension, size, signature, corruption, password protection, and text length, then reads PyMuPDF text blocks and cleans whitespace."
+          },
+          {
+            what: "The chunker turns a page into smaller, overlapping search units rather than embedding an entire page as one blurry meaning.",
+            why: "Small pieces match focused questions better; overlap prevents a fact split at a boundary from losing context.",
+            how: "_split() prefers paragraph, sentence, and word boundaries; _merge() packs pieces up to chunk_size and carries a chunk_overlap tail forward."
+          },
+          {
+            what: "The embedding model changes each chunk from words into a point in a 384-dimensional meaning space.",
+            why: "Vector search can find synonyms and related ideas even when the question does not use the document's exact words.",
+            how: "embed_documents() encodes stored chunks without a prefix. embed_query() adds BGE's search instruction, so query and document vectors are comparable."
+          },
+          {
+            what: "ChromaDB is the durable shelf: it stores the vector, original chunk text, and metadata together.",
+            why: "The app can restart without rereading every PDF, and metadata lets the final answer cite the exact source and page.",
+            how: "add_chunks() uses stable hash/page/index IDs with upsert(); search() embeds a question and converts cosine distances into similarity scores."
+          },
+          {
+            what: "This is where the second timeline begins. The chat question is paired with the PDFs the user selected.",
+            why: "Searching only checked documents makes the answer scope explicit and prevents an unrelated uploaded PDF from influencing the answer.",
+            how: "answer() builds ChatMessage history and selected file hashes, then asks the pipeline for a StreamingAnswer."
+          },
+          {
+            what: "Retrieval is the 'R' in RAG. It finds candidate passages and chooses the strongest evidence before generation.",
+            why: "The LLM cannot answer from a passage it never receives. Follow-up context also helps resolve words like 'it' or 'that'.",
+            how: "retrieve() searches the plain question and, when useful, a combined previous-question query; rerank() reads candidate pairs together and keeps top_k."
+          },
+          {
+            what: "prompts.py packages evidence into a controlled briefing for the model.",
+            why: "Explicit source tags and citation rules reduce unsupported answers and make each claim checkable in the UI.",
+            how: "format_sources() numbers chunks, _recent_history() trims old turns, and build_messages() puts rules, history, sources, and question in order."
+          },
+          {
+            what: "The local Ollama model is the generation step. It writes an answer from the supplied evidence and returns it incrementally.",
+            why: "Streaming makes a CPU response feel responsive, while local Ollama keeps the PDF and prompt on the user's machine.",
+            how: "check_ready() reports setup problems; stream_chat() sends options and yields non-empty response pieces; app.py displays them and their citations."
+          }
+        ];
+        var stageEls = document.querySelectorAll("#journey-track .journey-stage");
+        var current = 0;
+        var timer = null;
+        var payload = document.getElementById("journey-payload");
+        var status = document.getElementById("journey-status");
+        var file = document.getElementById("journey-file");
+        var explanation = document.getElementById("journey-explanation");
+        var arrival = document.getElementById("journey-arrival");
+        var vars = document.getElementById("journey-vars");
+        var functions = document.getElementById("journey-functions");
+        var lesson = document.getElementById("journey-lesson");
+        var playButton = document.getElementById("journey-play");
+
+        function listItems(items, target) {
+          target.innerHTML = items.map(function (item) {
+            return '<span class="detail-item"><b>What it is:</b> <code>' + item[0] + "</code><br /><b>What it does:</b> " + item[1] + "</span>";
+          }).join("");
+        }
+
+        function showStage(index) {
+          current = index;
+          var stage = stages[index];
+          stageEls.forEach(function (element, position) {
+            element.classList.toggle("active", position === index);
+            element.classList.toggle("done", position < index);
+          });
+          payload.textContent = stage.payload;
+          status.textContent = "Stage " + (index + 1) + " of " + stages.length + ": " + stage.file;
+          file.textContent = stage.file;
+          explanation.textContent = stage.explanation;
+          arrival.textContent = stage.arrival;
+          lesson.innerHTML = "<b>What:</b> " + lessons[index].what +
+            "<br /><b>Why:</b> " + lessons[index].why +
+            "<br /><b>How:</b> " + lessons[index].how;
+          listItems(stage.vars, vars);
+          listItems(stage.funcs, functions);
+        }
+
+        function nextStage() {
+          showStage((current + 1) % stages.length);
+        }
+
+        function stop() {
+          clearInterval(timer);
+          timer = null;
+          playButton.textContent = "▶ Play";
+        }
+
+        playButton.addEventListener("click", function () {
+          if (timer) {
+            stop();
+            status.textContent += " · paused";
+            return;
+          }
+          playButton.textContent = "❚❚ Pause";
+          nextStage();
+          timer = setInterval(nextStage, 2400);
+        });
+        document.getElementById("journey-step").addEventListener("click", function () {
+          stop();
+          nextStage();
+        });
+        document.getElementById("journey-reset").addEventListener("click", function () {
+          stop();
+          showStage(0);
+          status.textContent = "Ready: click Play or choose a stage";
+        });
+        stageEls.forEach(function (element, index) {
+          element.addEventListener("click", function () {
+            stop();
+            showStage(index);
+          });
+          element.addEventListener("keydown", function (event) {
+            if (event.key === "Enter" || event.key === " ") {
+              event.preventDefault();
+              stop();
+              showStage(index);
+            }
+          });
+        });
+        if (matchMedia("(prefers-reduced-motion: reduce)").matches) {
+          playButton.disabled = true;
+          playButton.textContent = "Play disabled";
+        }
+        showStage(0);
+      })();
+    </script>
+    <script>
+      (function() {
+        // Scroll Reveal Animation Logic
+        const observerOptions = {
+          root: null,
+          rootMargin: '0px',
+          threshold: 0.15
+        };
+
+        const observer = new IntersectionObserver((entries, observer) => {
+          entries.forEach(entry => {
+            if (entry.isIntersecting) {
+              entry.target.classList.add('active');
+            }
+          });
+        }, observerOptions);
+
+        document.querySelectorAll('.reveal').forEach(section => {
+          observer.observe(section);
+        });
+      })();
+    </script>
+  </body>
+</html>
